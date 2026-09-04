@@ -4,6 +4,7 @@ Commit message:
 $ARGUMENTS
 
 Steps:
+
 1. Check git status and inspect the diff.
 2. Stage all changes with `git add .`.
 3. Commit using exactly the commit message provided above.
