@@ -80,3 +80,40 @@ def seed_db():
 
     conn.commit()
     conn.close()
+
+
+class EmailAlreadyExistsError(Exception):
+    """Raised when a users row with the same email already exists."""
+
+
+def get_user_by_email(email):
+    """Return the users row matching email, or None.
+
+    The email is expected already stripped and lowercased by the caller.
+    """
+    conn = get_db()
+    user = conn.execute(
+        "SELECT * FROM users WHERE email = ?",
+        (email,),
+    ).fetchone()
+    conn.close()
+    return user
+
+
+def create_user(name, email, password_hash):
+    """Insert one user and return its new id.
+
+    Raises EmailAlreadyExistsError if the UNIQUE email constraint fires.
+    """
+    conn = get_db()
+    try:
+        cursor = conn.execute(
+            "INSERT INTO users (name, email, password_hash) VALUES (?, ?, ?)",
+            (name, email, password_hash),
+        )
+        conn.commit()
+        return cursor.lastrowid
+    except sqlite3.IntegrityError as exc:
+        raise EmailAlreadyExistsError(email) from exc
+    finally:
+        conn.close()
