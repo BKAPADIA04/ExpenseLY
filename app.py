@@ -1,5 +1,5 @@
-from flask import Flask, redirect, render_template, request, url_for
-from werkzeug.security import generate_password_hash
+from flask import Flask, redirect, render_template, request, session, url_for
+from werkzeug.security import check_password_hash, generate_password_hash
 
 from database.db import (
     EmailAlreadyExistsError,
@@ -11,6 +11,7 @@ from database.db import (
 )
 
 app = Flask(__name__)
+app.secret_key = "dev-secret-key-change-in-production"
 
 
 # ------------------------------------------------------------------ #
@@ -23,6 +24,42 @@ EMAIL_MAX_LENGTH = 120
 PASSWORD_MIN_LENGTH = 8
 
 DUPLICATE_EMAIL_ERROR = "An account with that email already exists."
+INVALID_LOGIN_ERROR = "Invalid email or password."
+
+
+# ------------------------------------------------------------------ #
+# Hardcoded profile data (Step 4) — replaced with real queries in     #
+# Step 5                                                              #
+# ------------------------------------------------------------------ #
+
+PROFILE_USER = {
+    "name": "Demo User",
+    "email": "demo@spendly.com",
+    "initials": "DU",
+    "member_since": "January 2025",
+}
+
+PROFILE_STATS = [
+    {"label": "Total spent", "value": "$290.83"},
+    {"label": "Transactions", "value": "8"},
+    {"label": "Top category", "value": "Food"},
+]
+
+PROFILE_TRANSACTIONS = [
+    {"date": "Jan 27", "description": "Restaurant dinner", "category": "Food", "amount": "$32.40"},
+    {"date": "Jan 21", "description": "Misc purchase", "category": "Other", "amount": "$9.99"},
+    {"date": "Jan 18", "description": "New shoes", "category": "Shopping", "amount": "$60.20"},
+    {"date": "Jan 12", "description": "Movie tickets", "category": "Entertainment", "amount": "$15.75"},
+    {"date": "Jan 9", "description": "Pharmacy", "category": "Health", "amount": "$25.00"},
+]
+
+PROFILE_CATEGORY_BREAKDOWN = [
+    {"category": "Food", "amount": "$77.90"},
+    {"category": "Bills", "amount": "$89.99"},
+    {"category": "Transport", "amount": "$12.00"},
+    {"category": "Shopping", "amount": "$60.20"},
+    {"category": "Other", "amount": "$50.74"},
+]
 
 
 def is_valid_email(email):
@@ -86,9 +123,21 @@ def register():
     return render_template("register.html", error=error, name=name, email=email)
 
 
-@app.route("/login")
+@app.route("/login", methods=["GET", "POST"])
 def login():
-    return render_template("login.html")
+    if request.method == "GET":
+        return render_template("login.html")
+
+    email = request.form.get("email", "").strip().lower()
+    password = request.form.get("password", "")
+    user = get_user_by_email(email)
+
+    if user is None or not check_password_hash(user["password_hash"], password):
+        return render_template("login.html", error=INVALID_LOGIN_ERROR)
+
+    session["user_id"] = user["id"]
+    session["user_name"] = user["name"]
+    return redirect(url_for("profile"))
 
 
 @app.route("/terms")
@@ -107,12 +156,21 @@ def privacy():
 
 @app.route("/logout")
 def logout():
-    return "Logout — coming in Step 3"
+    session.clear()
+    return redirect(url_for("landing"))
 
 
 @app.route("/profile")
 def profile():
-    return "Profile page — coming in Step 4"
+    if not session.get("user_id"):
+        return redirect(url_for("login"))
+    return render_template(
+        "profile.html",
+        user=PROFILE_USER,
+        stats=PROFILE_STATS,
+        transactions=PROFILE_TRANSACTIONS,
+        categories=PROFILE_CATEGORY_BREAKDOWN,
+    )
 
 
 @app.route("/expenses/add")
