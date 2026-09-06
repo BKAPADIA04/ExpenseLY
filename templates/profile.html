@@ -2,6 +2,10 @@
 
 {% block title %}Your Profile — Spendly{% endblock %}
 
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/profile.css') }}">
+{% endblock %}
+
 {% block content %}
 
 <section class="profile-section">
@@ -14,6 +18,23 @@
                 <p class="profile-email">{{ user.email }}</p>
                 <p class="profile-member-since">Member since {{ user.member_since }}</p>
             </div>
+        </div>
+
+        <div class="profile-filter-bar">
+            <form method="GET" action="{{ url_for('profile') }}" class="filter-form">
+                <div class="form-group filter-field">
+                    <label for="start_date">From</label>
+                    <input type="date" id="start_date" name="start_date"
+                           class="form-input" value="{{ start_date }}">
+                </div>
+                <div class="form-group filter-field">
+                    <label for="end_date">To</label>
+                    <input type="date" id="end_date" name="end_date"
+                           class="form-input" value="{{ end_date }}">
+                </div>
+                <button type="submit" class="btn-primary">Apply</button>
+                <a href="{{ url_for('profile') }}" class="btn-ghost">Clear</a>
+            </form>
         </div>
 
         <div class="stat-row">
@@ -44,6 +65,10 @@
                         <td><span class="category-badge category-badge-{{ tx.category|lower }}">{{ tx.category }}</span></td>
                         <td class="transaction-amount">{{ tx.amount }}</td>
                     </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="4" class="transaction-empty">No transactions in this date range.</td>
+                    </tr>
                     {% endfor %}
                 </tbody>
             </table>
@@ -57,6 +82,8 @@
                     <span class="category-badge category-badge-{{ cat.category|lower }}">{{ cat.category }}</span>
                     <span class="category-list-amount">{{ cat.amount }}</span>
                 </li>
+                {% else %}
+                <li class="category-list-row category-list-empty">No category data for this range.</li>
                 {% endfor %}
             </ul>
         </div>

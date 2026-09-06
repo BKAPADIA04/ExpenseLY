@@ -117,3 +117,37 @@ def create_user(name, email, password_hash):
         raise EmailAlreadyExistsError(email) from exc
     finally:
         conn.close()
+
+
+def get_user_by_id(user_id):
+    """Return the users row matching id, or None."""
+    conn = get_db()
+    user = conn.execute(
+        "SELECT * FROM users WHERE id = ?",
+        (user_id,),
+    ).fetchone()
+    conn.close()
+    return user
+
+
+def get_expenses_for_user(user_id, start_date=None, end_date=None):
+    """Return a user's expenses, newest first.
+
+    start_date/end_date are optional YYYY-MM-DD strings; when given, the
+    range is inclusive on both ends.
+    """
+    conn = get_db()
+    query = "SELECT * FROM expenses WHERE user_id = ?"
+    params = [user_id]
+
+    if start_date:
+        query += " AND date >= ?"
+        params.append(start_date)
+    if end_date:
+        query += " AND date <= ?"
+        params.append(end_date)
+
+    query += " ORDER BY date DESC, id DESC"
+    expenses = conn.execute(query, params).fetchall()
+    conn.close()
+    return expenses
