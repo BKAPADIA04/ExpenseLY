@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from flask import Flask, redirect, render_template, request, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -5,7 +7,9 @@ from database.db import (
     EmailAlreadyExistsError,
     create_user,
     get_db,
+    get_expenses_for_user,
     get_user_by_email,
+    get_user_by_id,
     init_db,
     seed_db,
 )
@@ -25,41 +29,6 @@ PASSWORD_MIN_LENGTH = 8
 
 DUPLICATE_EMAIL_ERROR = "An account with that email already exists."
 INVALID_LOGIN_ERROR = "Invalid email or password."
-
-
-# ------------------------------------------------------------------ #
-# Hardcoded profile data (Step 4) — replaced with real queries in     #
-# Step 5                                                              #
-# ------------------------------------------------------------------ #
-
-PROFILE_USER = {
-    "name": "Demo User",
-    "email": "demo@spendly.com",
-    "initials": "DU",
-    "member_since": "January 2025",
-}
-
-PROFILE_STATS = [
-    {"label": "Total spent", "value": "$290.83"},
-    {"label": "Transactions", "value": "8"},
-    {"label": "Top category", "value": "Food"},
-]
-
-PROFILE_TRANSACTIONS = [
-    {"date": "Jan 27", "description": "Restaurant dinner", "category": "Food", "amount": "$32.40"},
-    {"date": "Jan 21", "description": "Misc purchase", "category": "Other", "amount": "$9.99"},
-    {"date": "Jan 18", "description": "New shoes", "category": "Shopping", "amount": "$60.20"},
-    {"date": "Jan 12", "description": "Movie tickets", "category": "Entertainment", "amount": "$15.75"},
-    {"date": "Jan 9", "description": "Pharmacy", "category": "Health", "amount": "$25.00"},
-]
-
-PROFILE_CATEGORY_BREAKDOWN = [
-    {"category": "Food", "amount": "$77.90"},
-    {"category": "Bills", "amount": "$89.99"},
-    {"category": "Transport", "amount": "$12.00"},
-    {"category": "Shopping", "amount": "$60.20"},
-    {"category": "Other", "amount": "$50.74"},
-]
 
 
 def is_valid_email(email):
@@ -89,6 +58,76 @@ def validate_registration(name, email, password):
         return "Password must be at least 8 characters."
 
     return None
+
+
+DATE_FORMAT = "%Y-%m-%d"
+
+
+def parse_filter_date(value):
+    """Return value unchanged if it's a valid YYYY-MM-DD string, else None."""
+    if not value:
+        return None
+    try:
+        datetime.strptime(value, DATE_FORMAT)
+        return value
+    except ValueError:
+        return None
+
+
+def format_currency(amount):
+    return f"${amount:,.2f}"
+
+
+def format_display_date(iso_date):
+    dt = datetime.strptime(iso_date, DATE_FORMAT)
+    return f"{dt.strftime('%b')} {dt.day}"
+
+
+def initials_from_name(name):
+    return "".join(part[0] for part in name.split()[:2]).upper()
+
+
+def format_member_since(created_at):
+    dt = datetime.strptime(created_at, "%Y-%m-%d %H:%M:%S")
+    return dt.strftime("%B %Y")
+
+
+def build_profile_context(expenses):
+    """Turn a list of expense rows into (stats, transactions, categories)
+    context for profile.html."""
+    transactions = [
+        {
+            "date": format_display_date(e["date"]),
+            "description": e["description"] or "—",
+            "category": e["category"],
+            "amount": format_currency(e["amount"]),
+        }
+        for e in expenses
+    ]
+
+    category_totals = {}
+    for e in expenses:
+        category_totals[e["category"]] = (
+            category_totals.get(e["category"], 0) + e["amount"]
+        )
+
+    total_spent = sum(category_totals.values())
+    top_category = max(category_totals, key=category_totals.get) if category_totals else "—"
+
+    stats = [
+        {"label": "Total spent", "value": format_currency(total_spent)},
+        {"label": "Transactions", "value": str(len(expenses))},
+        {"label": "Top category", "value": top_category},
+    ]
+
+    categories = [
+        {"category": category, "amount": format_currency(amount)}
+        for category, amount in sorted(
+            category_totals.items(), key=lambda item: item[1], reverse=True
+        )
+    ]
+
+    return stats, transactions, categories
 
 
 # ------------------------------------------------------------------ #
@@ -164,12 +203,35 @@ def logout():
 def profile():
     if not session.get("user_id"):
         return redirect(url_for("login"))
+
+    raw_start_date = request.args.get("start_date", "")
+    raw_end_date = request.args.get("end_date", "")
+    start_date = parse_filter_date(raw_start_date)
+    end_date = parse_filter_date(raw_end_date)
+
+    start_is_malformed = bool(raw_start_date) and start_date is None
+    end_is_malformed = bool(raw_end_date) and end_date is None
+    backwards_range = bool(start_date) and bool(end_date) and start_date > end_date
+    if start_is_malformed or end_is_malformed or backwards_range:
+        start_date = end_date = None
+
+    user_row = get_user_by_id(session["user_id"])
+    expenses = get_expenses_for_user(session["user_id"], start_date, end_date)
+    stats, transactions, categories = build_profile_context(expenses)
+
     return render_template(
         "profile.html",
-        user=PROFILE_USER,
-        stats=PROFILE_STATS,
-        transactions=PROFILE_TRANSACTIONS,
-        categories=PROFILE_CATEGORY_BREAKDOWN,
+        user={
+            "name": user_row["name"],
+            "email": user_row["email"],
+            "initials": initials_from_name(user_row["name"]),
+            "member_since": format_member_since(user_row["created_at"]),
+        },
+        stats=stats,
+        transactions=transactions,
+        categories=categories,
+        start_date=start_date or "",
+        end_date=end_date or "",
     )
 
 
