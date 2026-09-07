@@ -88,8 +88,9 @@ There is no build step, linter, or frontend bundler configured — templates and
 | `GET /login` | Implemented — renders `login.html` |
 | `GET /terms` | Implemented — renders `terms.html` |
 | `GET /privacy` | Implemented — renders `privacy.html` |
-| `GET /logout` | Stub — Step 3 |
-| `GET /profile` | Stub — Step 4 |
+| `GET /logout` | Implemented — clears session, redirects to `landing` |
+| `GET /profile` | Implemented — renders `profile.html`, login-required |
+| `GET /analytics` | Implemented — renders `analytics.html` (coming-soon placeholder), login-required |
 | `GET /expenses/add` | Stub — Step 7 |
 | `GET /expenses/<id>/edit` | Stub — Step 8 |
 | `GET /expenses/<id>/delete` | Stub — Step 9 |
